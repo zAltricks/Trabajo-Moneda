@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Actividad-Api</title>
+
+    <!-- Bootstrap CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz"
+        crossorigin="anonymous">
+    </script>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.js"></script>
+
+    <!-- Flatpickr CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+</head>
+
+<style>
+    header {
+        background-color: black;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        width: auto;
+    }
+
+    body {
+        margin: 0%;
+    }
+
+    footer {
+        background-color: black;
+        color: white;
+        padding: 20px;
+        text-align: center;
+        position: relative;
+        bottom: 0;
+        width: auto;
+    }
+
+    header,
+    footer {
+        margin-left: 0;
+    }
+
+    table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    th,
+    td {
+        border: 1px solid black;
+        padding: 8px;
+        text-align: left;
+    }
+
+    th {
+        background-color: lightgray;
+    }
+</style>
+
+<body background="fondo.png" class="col-12">
+    <div class="col-12">
+        <header style="margin-bottom: 20px;">
+            <p>
+            <div>
+                <p style="font-size: 40px;">Mindicador API Example</p>
+            </div>
+            </p>
+        </header>
+    </div>
+
+    <div class="col-12 translate-middle fw-normal" style="text-align: center;">
+        <label for="indicator-select" style="font-size: 30px;" class="fw-normal">Selecciona una moneda: </label>
+        <select id="indicator-select" style="font-size: 30px;" class="form-control">
+            <option value="uf">Unidad de Fomento (UF)</option>
+            <option value="dolar">Dólar (USD)</option>
+            <option value="euro">Euro (EUR)</option>
+            <option value="utm">Unidad Tributaria Mensual (UTM)</option>
+            <option value="ipc">IPC (IPC)</option>
+            <option value="libra_cobre">Libra de Cobre (Libra Cobre)</option>
+        </select>
+
+        <div class="col-12 translate-middle fw-normal" style="text-align: center;">
+            <p style="font-size: 30px;">Año: <input style="font-size: 30px;" id="fecha" type="number" min="1900"
+                    max="2099" step="1" value="2023" /><button style="font-size: 30px;" id="update-button"
+                    class="btn btn-primary">Buscar</button></p>
+        </div>
+
+        <div class="col-12 translate-middle fw-normal" style="text-align: center;">
+            <p style="font-size: 30px;">Fecha (DD-MM-AAAA): <input style="font-size: 30px;" id="datepicker"
+                    class="form-control" placeholder="Selecciona una fecha" readonly="readonly" />
+                <button style="font-size: 30px;" id="update-button2" class="btn btn-primary">Buscar</button>
+            </p>
+        </div>
+
+        <div class="mt-3 col-xl-12 position-relative top-50 start-50 translate-middle">
+            <h2 id="indicator-name" style="text-align: center; font-size: 30px;"></h2>
+            <p id="indicator-value" style="text-align: center; font-size: 30px;"></p>
+            <canvas id="indicator-chart" style="text-align: center;"></canvas>
+            <table id="indicator-table" style="width: 100%; margin-top: 20px;"></table>
+        </div>
+
+        <div class="mt-3 col-xl-12 position-relative top-50 start-50 translate-middle"></div>
+    </div>
+
+    <footer>
+        <p></p>
+    </footer>
+
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script>
+        const indicatorSelect = document.getElementById('indicator-select');
+        const indicatorName = document.getElementById('indicator-name');
+        const indicatorValue = document.getElementById('indicator-value');
+        const indicatorChart = document.getElementById('indicator-chart');
+        const indicatorTable = document.getElementById('indicator-table');
+        const indicatorYear = document.getElementById('fecha');
+        const datepicker = document.getElementById('datepicker');
+        const updateButton = document.getElementById('update-button');
+
+        let selectedDate = null;
+        let chart = null; // Almacenar la instancia del gráfico actual
+
+        // Configuración del calendario con Flatpickr
+        flatpickr(datepicker, {
+            locale: 'es',
+            dateFormat: 'd-m-Y',
+            onClose: function (selectedDates, dateStr, instance) {
+                selectedDate = selectedDates[0];
+            }
+        });
+
+        const updateIndicator = async () => {
+            try {
+                const indicator = indicatorSelect.value;
+                let apiUrl = `https://mindicador.cl/api/${indicator}`;
+
+                if (selectedDate) {
+                    // Si se seleccionó una fecha, se agrega al API URL
+                    const formattedDate = formatDate(selectedDate);
+                    apiUrl += `/${formattedDate}`;
+                } else {
+                    // Si no se seleccionó una fecha, se utiliza el año
+                    const year = indicatorYear.value;
+                    apiUrl += `/${year}`;
+                }
+
+                const response = await axios.get(apiUrl);
+                const data = response.data;
+                const ultimoRegistro = data.serie[0];
+                indicatorName.textContent = data.nombre;
+                indicatorValue.textContent = `Valor: $${data.serie[0].valor} (${data.unidad_medida})`;
+                const fecha = new Date(ultimoRegistro.fecha).toLocaleDateString('es-ES');
+
+                if (chart) {
+                    // Limpiar el gráfico anterior si existe
+                    chart.destroy();
+                }
+
+                const chartData = {
+                    labels: data.serie.map(entry => new Date(entry.fecha).toLocaleDateString('es-ES')).reverse(),
+                    datasets: [{
+                        label: `${data.nombre} (${data.unidad_medida})`,
+                        data: data.serie.map(entry => entry.valor).reverse(),
+                        fill: false,
+                        borderColor: 'rgb(75, 192, 192)',
+                        lineTension: 0.1
+                    }]
+                };
+
+                chart = new Chart(indicatorChart, {
+                    type: 'line',
+                    data: chartData,
+                });
+
+                // Limpiar la tabla antes de actualizarla
+                indicatorTable.innerHTML = `
+					<tr>
+						<th>Moneda</th>
+						<th>Valor</th>
+						<th>Fecha</th>
+					</tr>
+				`;
+
+                // Agregar filas a la tabla con los valores y fechas
+                data.serie.forEach(entry => {
+                    const newRow = indicatorTable.insertRow();
+                    const currencyCell = newRow.insertCell();
+                    const valueCell = newRow.insertCell();
+                    const dateCell = newRow.insertCell();
+
+                    currencyCell.textContent = data.nombre;
+                    valueCell.textContent = `$${entry.valor}`;
+                    dateCell.textContent = new Date(entry.fecha).toLocaleDateString('es-ES');
+                });
+
+                selectedDate = null; // Reiniciar la fecha seleccionada
+            } catch (error) {
+                console.error(error);
+            }
+        };
+
+        function formatDate(date) {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0'); // El mes está basado en 0
+            const year = date.getFullYear();
+            return `${day}-${month}-${year}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', updateIndicator);
+        indicatorSelect.addEventListener('change', updateIndicator);
+        indicatorYear.addEventListener('change', updateIndicator);
+        datepicker.addEventListener('change', updateIndicator);
+        updateButton.addEventListener('click', updateIndicator);
+    </script>
+</body>
+
+</html>
